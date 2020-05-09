@@ -1,0 +1,10 @@
+# When null the CLI will attempt to create the Wireguard interface.
+interface_name: wg0
+# Our private key, used for all communication.
+private_key: 2Nul97MFIVEtmx+9JGy6ybLc1MhxvnLJv/DuEN9/kH4=
+
+links:
+  - host: vpn.fourbs.net
+    port: 51820
+    # Preshared key, used for encryption between this host and the server.
+    pre_shared_key: ZILJt2oaZCWd/DHIbLtTygxVBMiHUT2O+O+lEJx+3NU=

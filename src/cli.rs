@@ -1,19 +1,20 @@
 use std::fs;
 
-use toml;
+use serde_yaml;
 use serde::de::DeserializeOwned;
 use pretty_env_logger;
 use log::LevelFilter;
 use log::*;
 use clap::Clap;
 
-use crate::client::ClientConfig;
-use crate::server::ServerConfig;
+use crate::common::WgMaestro;
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 /// This doc string acts as a help message when the user runs '--help'
 /// as do all doc strings on fields
 #[derive(Clap)]
-#[clap(version = "1.0", author = "Oscar R. <oscar@fourbs.com.au>")]
+#[clap(version = VERSION, author = "Oscar R. <oscar@fourbs.com.au>")]
 struct Opts {
     /// A level of verbosity, and can be used multiple times
     #[clap(short, long, parse(from_occurrences))]
@@ -32,7 +33,7 @@ enum SubCommand {
 #[derive(Clap)]
 struct Server {
     /// Set config file location.
-    #[clap(default_value = "server.toml")]
+    #[clap(default_value = "server.yaml")]
     config: String,
     
 }
@@ -40,18 +41,18 @@ struct Server {
 #[derive(Clap)]
 struct Client {
     /// Set config file location. 
-    #[clap(default_value = "client.toml")]
+    #[clap(default_value = "client.yaml")]
     config: String,
 }
 
-pub struct Maestro {
+pub struct Application {
     opts: Opts,
+    maestro: Box<dyn WgMaestro>
 }
 
+impl Application {
 
-impl Maestro {
-
-    pub fn new() -> Maestro {
+    pub fn new() -> Self {
         let opts = Opts::parse();
         {
             let filter_level = match opts.verbose {
@@ -64,36 +65,33 @@ impl Maestro {
                 .init()
         };
 
-        Maestro {
-            opts
+        let maestro: Box<dyn WgMaestro>;
+        match &opts.subcmd {
+            SubCommand::Server(t) => {
+                use crate::server::{ ServerConfig, Server };
+                let config: ServerConfig = Self::load_config(&t.config);
+                maestro = Box::new(Server::new(config));
+            }
+            SubCommand::Client(t) => {
+                use crate::client::{ ClientConfig, Client };
+                let config: ClientConfig = Self::load_config(&t.config);
+                maestro = Box::new(Client::new(config));
+            }
+        }
+
+        Self {
+            opts,
+            maestro
         }
     }
 
     fn load_config<T: DeserializeOwned>(config_path: &str) -> T {
         let config_file = fs::read_to_string(config_path).expect("Failed to open config file.");
-        toml::from_str(&config_file).expect("Failed to parse toml.")
+        serde_yaml::from_str(&config_file).expect("Failed to parse YAML config.")
     }
 
     pub fn start(&mut self) {
-        match &self.opts.subcmd {
-            SubCommand::Server(t) => {
-                let config: ServerConfig = Self::load_config(&t.config);
-                debug!("Loaded config: {:?}", config);
-                self.start_server(config)
-            }
-            SubCommand::Client(t) => {
-                let config: ClientConfig = Self::load_config(&t.config);
-                debug!("Loaded config: {:?}", config);
-                self.start_client(config)
-            }
-        }
-    }
-
-    fn start_server(&self, server_config: ServerConfig) {
-        info!("Starting server...");
-    }
-
-    fn start_client(&self, client_config: ClientConfig) {
-        info!("Starting client...")
+        info!("Initializing wg-maestro v{:}", VERSION);
+        self.maestro.start()
     }
 }
