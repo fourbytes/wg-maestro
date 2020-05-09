@@ -25,13 +25,16 @@ pub struct Server<'a> {
 impl<'a> WgMaestro for Server<'a> {
     fn start(&mut self) {
         info!("Starting server...");
+
+        let device = self.wg.get_device();
+        debug!("Read Wireguard interface data: {:?}", device);
     }
 }
 
 impl<'a> Server<'a> {
     pub fn new(config: ServerConfig) -> Self {
-        debug!("Initializing server...");
-        let wg = WgInterface::new(config.interface_name.clone())
+        debug!("Setting up server...");
+        let wg = WgInterface::from_name(config.interface_name.clone())
             .expect("Failed to connect to Wireguard interface, do we have permission?");
         Self {
             wg,

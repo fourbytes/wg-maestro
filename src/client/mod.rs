@@ -24,14 +24,14 @@ pub struct Client<'a> {
 
 impl<'a> WgMaestro for Client<'a> {
     fn start(&mut self) {
-        info!("Starting server...");
+        info!("Starting client...");
     }
 }
 
 impl<'a> Client<'a> {
     pub fn new(config: ClientConfig) -> Self {
         debug!("Setting up client...");
-        let wg = WgInterface::new(config.interface_name.clone())
+        let wg = WgInterface::from_name(config.interface_name.clone())
             .expect("Failed to connect to Wireguard interface, do we have permission?");
         Self {
             wg,

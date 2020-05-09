@@ -1,5 +1,5 @@
 # When null the CLI will attempt to create the Wireguard interface.
-interface_name: wgm0
+interface_name: wgm1
 # Our private key, used for all communication.
 private_key: 2Nul97MFIVEtmx+9JGy6ybLc1MhxvnLJv/DuEN9/kH4=
 

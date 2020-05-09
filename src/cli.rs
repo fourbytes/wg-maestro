@@ -65,6 +65,8 @@ impl Application {
                 .init()
         };
 
+        info!("Initializing wg-maestro v{:}", VERSION);
+
         let maestro: Box<dyn WgMaestro>;
         match &opts.subcmd {
             SubCommand::Server(t) => {
@@ -85,13 +87,15 @@ impl Application {
         }
     }
 
-    fn load_config<T: DeserializeOwned>(config_path: &str) -> T {
+    fn load_config<T: DeserializeOwned + std::fmt::Debug>(config_path: &str) -> T {
         let config_file = fs::read_to_string(config_path).expect("Failed to open config file.");
-        serde_yaml::from_str(&config_file).expect("Failed to parse YAML config.")
+        let config = serde_yaml::from_str(&config_file).expect("Failed to parse YAML config.");
+        debug!("Loaded config from {:?}", config_path);
+        trace!("Config data: {:?}", config);
+        config
     }
 
     pub fn start(&mut self) {
-        info!("Initializing wg-maestro v{:}", VERSION);
         self.maestro.start()
     }
 }
