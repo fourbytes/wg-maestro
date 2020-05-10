@@ -1,3 +1,4 @@
+use anyhow::Error;
 use log::*;
 use serde::{ Serialize, Deserialize };
 
@@ -32,13 +33,11 @@ impl<'a> WgMaestro for Server<'a> {
 }
 
 impl<'a> Server<'a> {
-    pub fn new(config: ServerConfig) -> Self {
+    pub fn new(config: ServerConfig) -> Result<Self, Error> {
         debug!("Setting up server...");
-        let wg = WgInterface::from_name(config.interface_name.clone())
-            .expect("Failed to connect to Wireguard interface, do we have permission?");
-        Self {
-            wg,
-            config
+        match WgInterface::from_name(config.interface_name.clone()) {
+            Ok(wg) => Ok(Self { wg, config }),
+            Err(err) => Err(err)
         }
     }
 }

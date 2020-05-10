@@ -1,5 +1,6 @@
 use std::fs;
 
+use anyhow::Error;
 use serde_yaml;
 use serde::de::DeserializeOwned;
 use pretty_env_logger;
@@ -47,12 +48,12 @@ struct Client {
 
 pub struct Application {
     opts: Opts,
-    maestro: Box<dyn WgMaestro>
+    maestro: Box<dyn WgMaestro>,
 }
 
 impl Application {
 
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         let opts = Opts::parse();
         {
             let filter_level = match opts.verbose {
@@ -72,19 +73,19 @@ impl Application {
             SubCommand::Server(t) => {
                 use crate::server::{ ServerConfig, Server };
                 let config: ServerConfig = Self::load_config(&t.config);
-                maestro = Box::new(Server::new(config));
+                maestro = Box::new(Server::new(config)?);
             }
             SubCommand::Client(t) => {
                 use crate::client::{ ClientConfig, Client };
                 let config: ClientConfig = Self::load_config(&t.config);
-                maestro = Box::new(Client::new(config));
+                maestro = Box::new(Client::new(config)?);
             }
         }
 
-        Self {
+        Ok(Self {
             opts,
             maestro
-        }
+        })
     }
 
     fn load_config<T: DeserializeOwned + std::fmt::Debug>(config_path: &str) -> T {
