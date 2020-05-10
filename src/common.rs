@@ -20,8 +20,10 @@ impl<'a> WgInterface<'a> {
         let mut wg_socket = WgSocket::connect()?;
         let mut route_socket = RouteSocket::connect()?;
 
-        route_socket.add_device(&ifname)?;
-        debug!("Successfuly created device @ {:}", ifname);
+        match route_socket.add_device(&ifname) {
+            Ok(()) => debug!("Successfuly created device @ {:}", ifname),
+            Err(err) => warn!("Failed to create interface @ {:?} ({:?}). Trying to continue anyway...", ifname, err)
+        };
 
         let wg_device_interface = DeviceInterface::from_name(ifname);
         let device = wg_socket.get_device(wg_device_interface.clone())?;

@@ -7,12 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "3.0.0-beta.1"
-serde = { version = "1.0", features = ["derive"] }
+clap = "3.0.0-beta"
+serde = { version = "1", features = ["derive"] }
 log = "0.4"
 pretty_env_logger = "0.4"
-serde_yaml = "0.8.11"
-boringtun = "0.3.0"
-wireguard-uapi = "1.0.3"
-prometheus = "0.8.0"
-anyhow = "1.0.28"
+serde_yaml = "0.8"
+boringtun = "0.3"
+wireguard-uapi = "1.0"
+prometheus = "0.8"
+anyhow = "1.0"
