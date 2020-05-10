@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use anyhow::Error;
 use log::*;
 use serde::{ Serialize, Deserialize };
@@ -23,9 +24,10 @@ pub struct Server<'a> {
     wg: WgInterface<'a>
 }
 
+#[async_trait]
 impl<'a> WgMaestro for Server<'a> {
-    fn start(&mut self) {
-        info!("Starting server...");
+    async fn run(&mut self) {
+        info!("Starting server loop...");
 
         let device = self.wg.get_device();
         debug!("Read Wireguard interface data: {:?}", device);

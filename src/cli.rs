@@ -1,5 +1,6 @@
 use std::fs;
 
+use async_std::task;
 use anyhow::Error;
 use serde_yaml;
 use serde::de::DeserializeOwned;
@@ -97,6 +98,6 @@ impl Application {
     }
 
     pub fn start(&mut self) {
-        self.maestro.start()
+        task::block_on(self.maestro.run())
     }
 }

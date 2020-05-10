@@ -1,10 +1,12 @@
+use async_trait::async_trait;
 use anyhow::Error;
 use log::*;
 use wireguard_uapi::{ DeviceInterface, WgSocket, RouteSocket };
 use wireguard_uapi::{ get, set, err };
 
+#[async_trait]
 pub trait WgMaestro {
-    fn start(&mut self);
+    async fn run(&mut self);
 }
 
 pub struct WgInterface<'a> {

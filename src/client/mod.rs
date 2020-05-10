@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use anyhow::Error;
 use log::*;
 use serde::{ Serialize, Deserialize };
@@ -23,8 +24,10 @@ pub struct Client<'a> {
     wg: WgInterface<'a>
 }
 
+
+#[async_trait]
 impl<'a> WgMaestro for Client<'a> {
-    fn start(&mut self) {
+    async fn run(&mut self) {
         info!("Starting client...");
     }
 }

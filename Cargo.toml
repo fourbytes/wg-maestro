@@ -4,15 +4,25 @@ version = "0.1.0"
 authors = ["Oscar Rainford <oscar@fourbs.com.au>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-clap = "3.0.0-beta"
-serde = { version = "1", features = ["derive"] }
+# Logging
 log = "0.4"
 pretty_env_logger = "0.4"
+
+# CLI and Config Parsing
+clap = "3.0.0-beta"
+serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
-boringtun = "0.3"
-wireguard-uapi = "1.0"
-prometheus = "0.8"
+
+# Async IO and Error Handling
+async-std = "1.6.0-beta"
+async-trait = "0.1"
 anyhow = "1.0"
+
+# Wireguard
+wireguard-uapi = "1.0"
+# boringtun = "0.3"
+
+# Monitoring, TODO: make this an optional feature
+# prometheus = "0.8"
+

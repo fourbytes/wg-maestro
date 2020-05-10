@@ -1,5 +1,6 @@
 use anyhow::Error;
 use log::*;
+use async_std::task;
 
 pub mod common;
 pub mod client;
@@ -12,7 +13,7 @@ fn main() {
             app.start()
         }
         Err(err) => {
-            error!("Failed to start application: {:?}", err)
+            error!("Encountered failure: {:?}", err)
         }
     }
 }
