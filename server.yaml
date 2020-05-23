@@ -5,6 +5,7 @@ interface_name: wgm0
 listen_port: 51850
 # Our private key, used for all communication.
 private_key: 2Nul97MFIVEtmx+9JGy6ybLc1MhxvnLJv/DuEN9/kH4=
+prefix: fd67:8ac4:d9b3:a7bf::/64
 
 peers:
   - public_key: 7EMvdMabmEiJ1V76stY3aHojB0yCWxm/+uHY6/QWQjk=
