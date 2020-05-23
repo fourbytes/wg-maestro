@@ -1,4 +1,4 @@
-use std::net::Ipv6Addr;
+use std::net::{ IpAddr, Ipv6Addr };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{ Hash, Hasher };
 use byteorder::{ ByteOrder, BigEndian };
@@ -91,6 +91,10 @@ impl<'a> WgInterface<'a> {
     pub fn cleanup(&mut self) -> Result<()> {
         self.route_socket.del_device(&self.device.ifname)?;
         Ok(())
+    }
+
+    pub fn add_address(&mut self, address: IpAddr) {
+        // self.route_socket
     }
 
     pub fn get_device(&mut self) -> Result<&get::Device, err::GetDeviceError> {
