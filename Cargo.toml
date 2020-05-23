@@ -15,12 +15,16 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 
 # Async IO and Error Handling
-async-std = "1.6.0-beta"
+tokio = { version = "0.2", features = ["full"] }
+futures = "0.3"
 async-trait = "0.1"
 anyhow = "1.0"
+crossbeam-channel = "0.4"
 
 # Wireguard
+neli = "0.5.0-rc1"
 wireguard-uapi = "1.0"
+base64 = "0.12"
 # boringtun = "0.3"
 
 # Monitoring, TODO: make this an optional feature

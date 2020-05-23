@@ -1,19 +1,19 @@
-use anyhow::Error;
 use log::*;
-use async_std::task;
 
 pub mod common;
 pub mod client;
 pub mod server;
 mod cli;
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     match cli::Application::new() {
         Ok(mut app) => {
-            app.start()
+            app.start().await
         }
         Err(err) => {
-            error!("Encountered failure: {:?}", err)
+            error!("Encountered failure: {:?}", err);
+            Err(err)
         }
     }
 }

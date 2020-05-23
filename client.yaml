@@ -1,10 +1,14 @@
+type: client
+
 # When null the CLI will attempt to create the Wireguard interface.
 interface_name: wgm1
+listen_port: 51851
 # Our private key, used for all communication.
-private_key: 2Nul97MFIVEtmx+9JGy6ybLc1MhxvnLJv/DuEN9/kH4=
+private_key: YOlqSxydFB1G4k7+AbBDGfyhYZBTxWPAjZBd/etYF2U=
 
-links:
-  - host: vpn.fourbs.net
+peers:
+  - public_key: Qn4mf1baEaGuU++KdRD6v86JAhPiO3NPuvW+xushxx4=
+    host: localhost
     port: 51820
-    # Preshared key, used for encryption between this host and the server.
-    pre_shared_key: ZILJt2oaZCWd/DHIbLtTygxVBMiHUT2O+O+lEJx+3NU=
+    # Optional: preshared key, used for encryption between this host and the server.
+    # pre_shared_key: ZILJt2oaZCWd/DHIbLtTygxVBMiHUT2O+O+lEJx+3NU=

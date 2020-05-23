@@ -1,7 +1,8 @@
 use std::fs;
 
-use async_std::task;
-use anyhow::Error;
+use crossbeam_channel::unbounded;
+use tokio::signal::unix::{ signal, SignalKind };
+use anyhow::{ Result, Error };
 use serde_yaml;
 use serde::de::DeserializeOwned;
 use pretty_env_logger;
@@ -97,7 +98,27 @@ impl Application {
         config
     }
 
-    pub fn start(&mut self) {
-        task::block_on(self.maestro.run())
+    pub async fn start(&mut self) -> Result<()> {
+        let (s, r) = unbounded::<SignalKind>();
+
+        let mut signal_stream = signal(SignalKind::interrupt())?;
+        tokio::spawn(async move {
+            loop {
+                match signal_stream.recv().await {
+                    Some(signal) => s.send(SignalKind::interrupt()).ok().unwrap(),
+                    None => ()
+                };
+            }
+        });
+
+        match self.maestro.run(r).await {
+            Err(err) => {
+                self.maestro.cleanup().await?;
+                Err(err)
+            }
+            Ok(_) => {
+                Ok(())
+            }
+        }
     }
 }
