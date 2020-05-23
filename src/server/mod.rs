@@ -1,7 +1,3 @@
-use std::net::Ipv6Addr;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{ Hash, Hasher };
-use byteorder::{ ByteOrder, BigEndian };
 use async_trait::async_trait;
 use anyhow::{ Error, Result };
 use log::*;
@@ -44,8 +40,8 @@ pub struct Server<'a> {
 #[async_trait]
 impl<'a> WgMaestro for Server<'a> {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> anyhow::Result<()> {
-        let device = self.wg.get_device();
-        let address = self.get_address()?;
+        self.wg.get_device().ok();
+        let address = self.wg.get_ll_address()?;
         debug!("Setting Wireguard link-local address to {}", address);
 
         let server_addr = format!("127.0.0.1:{}", self.config.listen_port);
@@ -111,24 +107,5 @@ impl<'a> Server<'a> {
 
     fn do_loop(&mut self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn get_address(&self) -> Result<Ipv6Addr> {
-        // Replace DefaultHasher with a more robust solution.
-        let hash = {
-            let mut hasher = DefaultHasher::new();
-            self.wg.get_public_key().hash(&mut hasher);
-            hasher.finish()
-        };
-        let data = {
-            let mut buf = [0u8; 8];
-            BigEndian::write_u64(&mut buf, hash);
-            let mut data = [0u16; 4];
-            for (i, item) in buf.chunks(2).enumerate() {
-                data[i] = BigEndian::read_u16(item)
-            }
-            data
-        };
-        Ok(Ipv6Addr::new(0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3]))
     }
 }

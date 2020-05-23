@@ -1,3 +1,7 @@
+use std::net::Ipv6Addr;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{ Hash, Hasher };
+use byteorder::{ ByteOrder, BigEndian };
 use async_trait::async_trait;
 use anyhow::{ Error, Result };
 use log::*;
@@ -63,6 +67,25 @@ impl<'a> WgInterface<'a> {
 
     pub fn get_public_key(&self) -> [u8; 32] {
         self.device.public_key.unwrap()
+    }
+
+    pub fn get_ll_address(&self) -> Result<Ipv6Addr> {
+        // Replace DefaultHasher with a more robust solution.
+        let hash = {
+            let mut hasher = DefaultHasher::new();
+            self.device.public_key.hash(&mut hasher);
+            hasher.finish()
+        };
+        let data = {
+            let mut buf = [0u8; 8];
+            BigEndian::write_u64(&mut buf, hash);
+            let mut data = [0u16; 4];
+            for (i, item) in buf.chunks(2).enumerate() {
+                data[i] = BigEndian::read_u16(item)
+            }
+            data
+        };
+        Ok(Ipv6Addr::new(0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3]))
     }
 
     pub fn cleanup(&mut self) -> Result<()> {
