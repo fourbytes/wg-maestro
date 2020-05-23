@@ -49,7 +49,7 @@ impl<'a> WgInterface<'a> {
 
         let wg_device_interface = DeviceInterface::from_name(ifname);
         let device = wg_socket.get_device(wg_device_interface.clone())?;
-        debug!("Retrieved initial device data: {:?}", device);
+        trace!("Retrieved initial device data: {:?}", device);
         
         let wg_device_interface = DeviceInterface::from_index(device.ifindex);
 
@@ -61,14 +61,19 @@ impl<'a> WgInterface<'a> {
         })
     }
 
+    pub fn get_public_key(&self) -> [u8; 32] {
+        self.device.public_key.unwrap()
+    }
+
     pub fn cleanup(&mut self) -> Result<()> {
         self.route_socket.del_device(&self.device.ifname)?;
         Ok(())
     }
 
-    pub fn get_device(&mut self) -> Result<get::Device, err::GetDeviceError> {
-        self.wg_socket
-            .get_device(self.wg_device_interface.clone())
+    pub fn get_device(&mut self) -> Result<&get::Device, err::GetDeviceError> {
+        self.device = self.wg_socket
+            .get_device(self.wg_device_interface.clone())?;
+        Ok(&self.device)
     }
 
     pub fn set_device(&mut self, device: set::Device) -> Result<(), err::SetDeviceError> {

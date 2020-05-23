@@ -1,3 +1,7 @@
+use std::net::Ipv6Addr;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{ Hash, Hasher };
+use byteorder::{ ByteOrder, BigEndian };
 use async_trait::async_trait;
 use anyhow::{ Error, Result };
 use log::*;
@@ -34,18 +38,19 @@ pub struct Server<'a> {
     config: ServerConfig,
     wg: WgInterface<'a>,
     listener: Option<TcpListener>,
-    should_exit: bool
+    should_exit: bool,
 }
 
 #[async_trait]
 impl<'a> WgMaestro for Server<'a> {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> anyhow::Result<()> {
-        let server_addr = format!("127.0.0.1:{}", self.config.listen_port);
-        info!("Starting server loop on {:?}", server_addr);
-        self.listener = Some(TcpListener::bind(server_addr).await?);
-
         let device = self.wg.get_device();
-        debug!("Read Wireguard interface data: {:?}", device);
+        let address = self.get_address()?;
+        debug!("Setting Wireguard link-local address to {}", address);
+
+        let server_addr = format!("127.0.0.1:{}", self.config.listen_port);
+        info!("Starting server loop on {}", server_addr);
+        self.listener = Some(TcpListener::bind(server_addr).await?);
 
         loop {
             match signal_receiver.recv() {
@@ -95,6 +100,7 @@ impl<'a> Server<'a> {
         }
 
         wg.set_device(device)?;
+
         Ok(Self {
             config,
             wg,
@@ -105,5 +111,24 @@ impl<'a> Server<'a> {
 
     fn do_loop(&mut self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn get_address(&self) -> Result<Ipv6Addr> {
+        // Replace DefaultHasher with a more robust solution.
+        let hash = {
+            let mut hasher = DefaultHasher::new();
+            self.wg.get_public_key().hash(&mut hasher);
+            hasher.finish()
+        };
+        let data = {
+            let mut buf = [0u8; 8];
+            BigEndian::write_u64(&mut buf, hash);
+            let mut data = [0u16; 4];
+            for (i, item) in buf.chunks(2).enumerate() {
+                data[i] = BigEndian::read_u16(item)
+            }
+            data
+        };
+        Ok(Ipv6Addr::new(0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3]))
     }
 }

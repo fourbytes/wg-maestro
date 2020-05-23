@@ -105,7 +105,7 @@ impl Application {
         tokio::spawn(async move {
             loop {
                 match signal_stream.recv().await {
-                    Some(signal) => s.send(SignalKind::interrupt()).ok().unwrap(),
+                    Some(_) => s.send(SignalKind::interrupt()).ok().unwrap(),
                     None => ()
                 };
             }

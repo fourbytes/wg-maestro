@@ -935,6 +935,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64",
+ "byteorder",
  "clap",
  "crossbeam-channel",
  "futures",
