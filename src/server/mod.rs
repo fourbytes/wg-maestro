@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use anyhow::{ Error, Result };
+use std::net::Ipv6Addr;
+use ipnet::Ipv6Net;
 use log::*;
 use serde::{ Serialize, Deserialize };
 use wireguard_uapi::set::WgDeviceF;
@@ -13,21 +15,31 @@ use crate::common::{ WgInterface, WgMaestro, WgKey, base64_to_key };
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ServerConfig {
     interface_name: String,
-    listen_port: u16,
+    wireguard_port: u16,
+    maestro_port: u16,
     fwmark: Option<u32>,
     #[serde(deserialize_with = "base64_to_key")]
     private_key: WgKey,
-    peers: Vec<ServerPeer>
+    addresses: Vec<Address>,
+    clients: Vec<Client>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ServerPeer {
-    host: Option<String>,
-    port: Option<u16>,
+pub struct Address {
+    prefix: Ipv6Net,
     #[serde(deserialize_with = "base64_to_key")]
     public_key: WgKey,
-    // #[serde(deserialize_with = "base64_to_key")]
-    // pre_shared_key: Option<WgKey>
+    #[serde(deserialize_with = "base64_to_key")]
+    pre_shared_key: Option<WgKey>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Client {
+    #[serde(deserialize_with = "base64_to_key")]
+    public_key: WgKey,
+    #[serde(deserialize_with = "base64_to_key")]
+    pre_shared_key: Option<WgKey>,
+    hostname: Option<String>,
 }
 
 pub struct Server<'a> {
@@ -88,7 +100,7 @@ impl<'a> Server<'a> {
         let mut device = wg.build_set_device()
             .flags(vec![WgDeviceF::ReplacePeers])
             .private_key(&config.private_key)
-            .listen_port(config.listen_port);
+            .listen_port(config.wireguard_port);
 
         match config.fwmark {
             Some(fwmark) => device = device.fwmark(fwmark),
