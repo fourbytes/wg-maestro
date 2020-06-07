@@ -97,6 +97,11 @@ impl<'a> WgInterface<'a> {
         ))
     }
 
+    pub fn setup_address(&self, addr: Ipv6Addr) -> Result<()> {
+        // self.wg_device_interface
+        Ok(())
+    }
+
     pub fn cleanup(&mut self) -> Result<()> {
         self.route_socket.del_device(&self.device.ifname)?;
         Ok(())

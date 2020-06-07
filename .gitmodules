@@ -1,3 +1,4 @@
 [submodule "wireguard-uapi-rs"]
 	path = wireguard-uapi-rs
 	url = git@github.com:fourbs-net/wireguard-uapi-rs.git
+	branch = master

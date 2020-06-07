@@ -27,9 +27,8 @@ pub struct ServerConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Address {
     prefix: Ipv6Net,
-    #[serde(deserialize_with = "base64_to_key")]
-    public_key: WgKey,
-    pre_shared_key: Option<WgKey>,
+    // #[serde(deserialize_with = "base64_to_key")]
+    // pre_shared_key: Option<WgKey>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -53,6 +52,7 @@ impl<'a> WgMaestro for Server<'a> {
         self.wg.get_device().ok();
         let address = self.wg.get_ll_address()?;
         debug!("Setting Wireguard link-local address to {}", address);
+        self.wg.setup_address(address)?;
 
         let server_addr = format!("127.0.0.1:{}", self.config.maestro_port);
         info!("Starting server loop on {}", server_addr);
