@@ -1,14 +1,14 @@
 use std::fs;
 
+use anyhow::{Error, Result};
+use clap::Clap;
 use crossbeam_channel::unbounded;
-use tokio::signal::unix::{ signal, SignalKind };
-use anyhow::{ Result, Error };
-use serde_yaml;
-use serde::de::DeserializeOwned;
-use pretty_env_logger;
 use log::LevelFilter;
 use log::*;
-use clap::Clap;
+use pretty_env_logger;
+use serde::de::DeserializeOwned;
+use serde_yaml;
+use tokio::signal::unix::{signal, SignalKind};
 
 use crate::common::WgMaestro;
 
@@ -29,7 +29,7 @@ struct Opts {
 #[derive(Clap)]
 enum SubCommand {
     Server(Server),
-    Client(Client)
+    Client(Client),
 }
 
 /// A subcommand for starting the server.
@@ -38,12 +38,11 @@ struct Server {
     /// Set config file location.
     #[clap(default_value = "server.yaml")]
     config: String,
-    
 }
 
 #[derive(Clap)]
 struct Client {
-    /// Set config file location. 
+    /// Set config file location.
     #[clap(default_value = "client.yaml")]
     config: String,
 }
@@ -54,14 +53,13 @@ pub struct Application {
 }
 
 impl Application {
-
     pub fn new() -> Result<Self, Error> {
         let opts = Opts::parse();
         {
             let filter_level = match opts.verbose {
                 0 => LevelFilter::Info,
                 1 => LevelFilter::Debug,
-                2 | _ => LevelFilter::Trace
+                2 | _ => LevelFilter::Trace,
             };
             pretty_env_logger::formatted_builder()
                 .filter(None, filter_level)
@@ -73,21 +71,18 @@ impl Application {
         let maestro: Box<dyn WgMaestro>;
         match &opts.subcmd {
             SubCommand::Server(t) => {
-                use crate::server::{ ServerConfig, Server };
+                use crate::server::{Server, ServerConfig};
                 let config: ServerConfig = Self::load_config(&t.config);
                 maestro = Box::new(Server::new(config)?);
             }
             SubCommand::Client(t) => {
-                use crate::client::{ ClientConfig, Client };
+                use crate::client::{Client, ClientConfig};
                 let config: ClientConfig = Self::load_config(&t.config);
                 maestro = Box::new(Client::new(config)?);
             }
         }
 
-        Ok(Self {
-            opts,
-            maestro
-        })
+        Ok(Self { opts, maestro })
     }
 
     fn load_config<T: DeserializeOwned + std::fmt::Debug>(config_path: &str) -> T {
@@ -106,7 +101,7 @@ impl Application {
             loop {
                 match signal_stream.recv().await {
                     Some(_) => s.send(SignalKind::interrupt()).ok().unwrap(),
-                    None => ()
+                    None => (),
                 };
             }
         });
@@ -116,9 +111,7 @@ impl Application {
                 self.maestro.cleanup().await?;
                 Err(err)
             }
-            Ok(_) => {
-                Ok(())
-            }
+            Ok(_) => Ok(()),
         }
     }
 }

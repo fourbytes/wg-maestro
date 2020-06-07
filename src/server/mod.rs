@@ -1,16 +1,16 @@
+use anyhow::{Error, Result};
 use async_trait::async_trait;
-use anyhow::{ Error, Result };
-use std::net::Ipv6Addr;
+use crossbeam_channel::Receiver;
 use ipnet::Ipv6Net;
 use log::*;
-use serde::{ Serialize, Deserialize };
-use wireguard_uapi::set::WgDeviceF;
-use crossbeam_channel::Receiver;
+use serde::{Deserialize, Serialize};
+use std::net::Ipv6Addr;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio::signal::unix::SignalKind;
+use wireguard_uapi::set::WgDeviceF;
 
-use crate::common::{ WgInterface, WgMaestro, WgKey, base64_to_key };
+use crate::common::{base64_to_key, WgInterface, WgKey, WgMaestro};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ServerConfig {
@@ -21,7 +21,7 @@ pub struct ServerConfig {
     #[serde(deserialize_with = "base64_to_key")]
     private_key: WgKey,
     addresses: Vec<Address>,
-    clients: Vec<Client>
+    clients: Vec<Client>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,15 +29,13 @@ pub struct Address {
     prefix: Ipv6Net,
     #[serde(deserialize_with = "base64_to_key")]
     public_key: WgKey,
-    #[serde(deserialize_with = "base64_to_key")]
-    pre_shared_key: Option<WgKey>
+    pre_shared_key: Option<WgKey>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Client {
     #[serde(deserialize_with = "base64_to_key")]
     public_key: WgKey,
-    #[serde(deserialize_with = "base64_to_key")]
     pre_shared_key: Option<WgKey>,
     hostname: Option<String>,
 }
@@ -56,7 +54,7 @@ impl<'a> WgMaestro for Server<'a> {
         let address = self.wg.get_ll_address()?;
         debug!("Setting Wireguard link-local address to {}", address);
 
-        let server_addr = format!("127.0.0.1:{}", self.config.listen_port);
+        let server_addr = format!("127.0.0.1:{}", self.config.maestro_port);
         info!("Starting server loop on {}", server_addr);
         self.listener = Some(TcpListener::bind(server_addr).await?);
 
@@ -66,7 +64,7 @@ impl<'a> WgMaestro for Server<'a> {
                     info!("Received signal: {:?}", signal);
                     self.should_exit = true;
                 }
-                Err(_) => ()
+                Err(_) => (),
             }
             if self.should_exit {
                 debug!("Exiting...");
@@ -82,7 +80,7 @@ impl<'a> WgMaestro for Server<'a> {
             // Shutdown the TCP stream
             match self.listener.take() {
                 Some(_) => (),
-                _ => ()
+                _ => (),
             }
         }
         {
@@ -97,14 +95,15 @@ impl<'a> Server<'a> {
     pub fn new(config: ServerConfig) -> Result<Self, Error> {
         debug!("Setting up server...");
         let mut wg = WgInterface::from_name(config.interface_name.clone())?;
-        let mut device = wg.build_set_device()
+        let mut device = wg
+            .build_set_device()
             .flags(vec![WgDeviceF::ReplacePeers])
             .private_key(&config.private_key)
             .listen_port(config.wireguard_port);
 
         match config.fwmark {
             Some(fwmark) => device = device.fwmark(fwmark),
-            _ => ()
+            _ => (),
         }
 
         wg.set_device(device)?;
@@ -113,7 +112,7 @@ impl<'a> Server<'a> {
             config,
             wg,
             listener: None,
-            should_exit: false
+            should_exit: false,
         })
     }
 

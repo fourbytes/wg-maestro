@@ -13,10 +13,10 @@ addresses:
   - prefix: fd67:8ac4:d9b3:a7bf::/64
   - prefix: 2001:db8:a02f:9e23::/64
     domain: localdomain.
-    only_peers: [localhost]
+    only_peers: [testclient]
 
 clients:
   - public_key: 7EMvdMabmEiJ1V76stY3aHojB0yCWxm/+uHY6/QWQjk=
-    hostname: localclient
+    hostname: testclient
     # Optional: preshared key, used for encryption between this host and the server.
     # pre_shared_key: ZILJt2oaZCWd/DHIbLtTygxVBMiHUT2O+O+lEJx+3NU=

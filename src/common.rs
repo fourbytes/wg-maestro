@@ -1,31 +1,35 @@
-use std::net::{ IpAddr, Ipv6Addr };
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{ Hash, Hasher };
-use byteorder::{ ByteOrder, BigEndian };
+use anyhow::{Error, Result};
 use async_trait::async_trait;
-use anyhow::{ Error, Result };
-use log::*;
 use base64;
-use serde::de::{self, Deserializer};
+use byteorder::{BigEndian, ByteOrder};
 use crossbeam_channel::Receiver;
+use log::*;
+use serde::de::{self, Deserializer};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::net::{IpAddr, Ipv6Addr};
 use tokio::signal::unix::SignalKind;
-use wireguard_uapi::{ DeviceInterface, WgSocket, RouteSocket };
-use wireguard_uapi::{ get, set, err };
+use wireguard_uapi::{err, get, set};
+use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
 
 pub type WgKey = [u8; 32];
 pub fn base64_to_key<'de, D>(deserializer: D) -> Result<WgKey, D::Error>
-where D: Deserializer<'de> {
+where
+    D: Deserializer<'de>,
+{
     let s: String = de::Deserialize::deserialize(deserializer)?;
     match base64::decode(s) {
         Ok(data) => {
             let mut key = [0u8; 32];
             key.copy_from_slice(&data);
             Ok(key)
-        },
-        Err(err) => Err(de::Error::custom(format!("Failed to decode base64 string: {:?}", err)))
+        }
+        Err(err) => Err(de::Error::custom(format!(
+            "Failed to decode base64 string: {:?}",
+            err
+        ))),
     }
 }
-
 
 #[async_trait]
 pub trait WgMaestro {
@@ -37,7 +41,7 @@ pub struct WgInterface<'a> {
     wg_socket: WgSocket,
     route_socket: RouteSocket,
     wg_device_interface: DeviceInterface<'a>,
-    device: get::Device
+    device: get::Device,
 }
 
 impl<'a> WgInterface<'a> {
@@ -48,20 +52,23 @@ impl<'a> WgInterface<'a> {
 
         match route_socket.add_device(&ifname) {
             Ok(()) => debug!("Successfuly created device @ {:}", ifname),
-            Err(err) => warn!("Failed to create interface @ {:?} ({:?}). Trying to continue anyway...", ifname, err)
+            Err(err) => warn!(
+                "Failed to create interface @ {:?} ({:?}). Trying to continue anyway...",
+                ifname, err
+            ),
         };
 
         let wg_device_interface = DeviceInterface::from_name(ifname);
         let device = wg_socket.get_device(wg_device_interface.clone())?;
         trace!("Retrieved initial device data: {:?}", device);
-        
+
         let wg_device_interface = DeviceInterface::from_index(device.ifindex);
 
         Ok(Self {
             wg_socket,
             route_socket,
             wg_device_interface,
-            device
+            device,
         })
     }
 
@@ -85,7 +92,9 @@ impl<'a> WgInterface<'a> {
             }
             data
         };
-        Ok(Ipv6Addr::new(0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3]))
+        Ok(Ipv6Addr::new(
+            0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3],
+        ))
     }
 
     pub fn cleanup(&mut self) -> Result<()> {
@@ -98,7 +107,8 @@ impl<'a> WgInterface<'a> {
     }
 
     pub fn get_device(&mut self) -> Result<&get::Device, err::GetDeviceError> {
-        self.device = self.wg_socket
+        self.device = self
+            .wg_socket
             .get_device(self.wg_device_interface.clone())?;
         Ok(&self.device)
     }
@@ -115,19 +125,17 @@ impl<'a> WgInterface<'a> {
             interface: self.wg_device_interface.clone(),
             private_key: None,
             listen_port: Some(self.device.listen_port.clone()),
-            peers: vec![]
+            peers: vec![],
         }
     }
 
     pub fn set_port(&mut self, listen_port: u16) -> Result<(), err::SetDeviceError> {
-        let device = self.build_set_device()
-            .listen_port(listen_port);
+        let device = self.build_set_device().listen_port(listen_port);
         self.wg_socket.set_device(device)
     }
 
     pub fn set_private_key(&mut self, private_key: &[u8; 32]) -> Result<(), err::SetDeviceError> {
-        let device = self.build_set_device()
-            .private_key(private_key);
+        let device = self.build_set_device().private_key(private_key);
         self.wg_socket.set_device(device)
     }
 }
