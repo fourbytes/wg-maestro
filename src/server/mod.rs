@@ -1,14 +1,16 @@
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use crossbeam_channel::Receiver;
-use ipnet::Ipv6Net;
+use ipnet::{IpNet, Ipv6Net};
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::net::Ipv6Addr;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio::signal::unix::SignalKind;
+
 use wireguard_uapi::set::WgDeviceF;
+use wireguard_uapi::WireGuardDeviceAddrScope;
 
 use crate::common::{base64_to_key, WgInterface, WgKey, WgMaestro};
 
@@ -49,10 +51,18 @@ pub struct Server<'a> {
 #[async_trait]
 impl<'a> WgMaestro for Server<'a> {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> anyhow::Result<()> {
-        self.wg.get_device().ok();
-        let address = self.wg.get_ll_address()?;
-        debug!("Setting Wireguard link-local address to {}", address);
-        self.wg.setup_address(address)?;
+        let device = self.wg.get_device().ok().unwrap();
+        info!(
+            "Configured Wireguard interface (received public key {})",
+            base64::encode(device.public_key.unwrap())
+        );
+
+        let ll_address = self.wg.get_ll_address()?;
+        debug!("Setting Wireguard link-local address to {}", ll_address);
+        let ll_net = Ipv6Net::new(ll_address, 64)?;
+        self.wg
+            .setup_address(IpNet::V6(ll_net), WireGuardDeviceAddrScope::Link)
+            .await?;
 
         let server_addr = format!("127.0.0.1:{}", self.config.maestro_port);
         info!("Starting server loop on {}", server_addr);

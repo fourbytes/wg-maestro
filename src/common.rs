@@ -3,12 +3,15 @@ use async_trait::async_trait;
 use base64;
 use byteorder::{BigEndian, ByteOrder};
 use crossbeam_channel::Receiver;
+use ipnet::IpNet;
 use log::*;
 use serde::de::{self, Deserializer};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::Ipv6Addr;
+use tokio::process::Command;
 use tokio::signal::unix::SignalKind;
+use wireguard_uapi::WireGuardDeviceAddrScope;
 use wireguard_uapi::{err, get, set};
 use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
 
@@ -97,18 +100,37 @@ impl<'a> WgInterface<'a> {
         ))
     }
 
-    pub fn setup_address(&self, addr: Ipv6Addr) -> Result<()> {
-        // self.wg_device_interface
+    pub async fn setup_address(
+        &mut self,
+        addr: IpNet,
+        scope: WireGuardDeviceAddrScope,
+    ) -> Result<()> {
+        // self.route_socket.add_addr(&ifname, addr, scope)?;
+        let args = &[
+            "addr",
+            "add",
+            &addr.to_string(),
+            "dev",
+            &self.device.ifname,
+            "scope",
+            match scope {
+                WireGuardDeviceAddrScope::Link => "link",
+                WireGuardDeviceAddrScope::Universe => "universe",
+                WireGuardDeviceAddrScope::Site => "site",
+                WireGuardDeviceAddrScope::Host => "host",
+                WireGuardDeviceAddrScope::Nowhere => "nowhere",
+            },
+        ];
+        let status = Command::new("ip").args(args).status().await?;
+
+        // trace!("Spawning command: {}", command);
+
         Ok(())
     }
 
     pub fn cleanup(&mut self) -> Result<()> {
         self.route_socket.del_device(&self.device.ifname)?;
         Ok(())
-    }
-
-    pub fn add_address(&mut self, address: IpAddr) {
-        // self.route_socket
     }
 
     pub fn get_device(&mut self) -> Result<&get::Device, err::GetDeviceError> {
