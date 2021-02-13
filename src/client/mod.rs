@@ -1,15 +1,18 @@
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use crossbeam_channel::Receiver;
-use ipnet::{IpNet, Ipv6Net};
+use ipnet::Ipv6Net;
 use log::*;
+use rtnetlink::new_connection;
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use tokio::signal::unix::SignalKind;
 
-use wireguard_uapi::set::WgDeviceF;
-use wireguard_uapi::WireGuardDeviceAddrScope;
+use wireguard_uapi::set::{AllowedIp, Peer, WgDeviceF};
 
-use crate::common::{base64_to_key, WgInterface, WgKey, WgMaestro};
+use crate::common::{
+    add_address, address_from_public_key, base64_to_key, set_link_up, WgInterface, WgKey, WgMaestro,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientConfig {
@@ -40,30 +43,42 @@ pub struct Client<'a> {
 #[async_trait]
 impl<'a> WgMaestro for Client<'a> {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> Result<()> {
+        let ll_address = self.wg.ll_address()?;
         let device = self.wg.get_device().ok().unwrap();
         info!(
             "Configured Wireguard interface (received public key {})",
             base64::encode(device.public_key.unwrap())
         );
 
-        let ll_address = self.wg.get_ll_address()?;
+        info!("Setting up netlink route connection...");
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
         debug!("Setting Wireguard link-local address to {}", ll_address);
         let ll_net = Ipv6Net::new(ll_address, 64)?;
-        self.wg
-            .setup_address(IpNet::V6(ll_net), WireGuardDeviceAddrScope::Link)
-            .await?;
+        add_address(&device.ifname, ll_net, handle.clone()).await?;
+        set_link_up(&device.ifname, handle).await?;
 
         info!("Starting client...");
-
-        // self.wg.build_set_device().peers(Peer::new())
+        debug!("Updating peers...");
+        let server = &self.config.server;
+        let addrs = format!("{}:{}", server.host, server.wireguard_port)
+            .to_socket_addrs()?
+            .collect::<Vec<SocketAddr>>();
+        let server_ll_address = IpAddr::V6(address_from_public_key(&server.public_key).unwrap());
+        let device =
+            self.wg
+                .build_set_device()
+                .peers(vec![Peer::from_public_key(&server.public_key)
+                    .endpoint(addrs.first().expect("Couldn't find host."))
+                    .allowed_ips(vec![AllowedIp::from_ipaddr(&server_ll_address)])
+                    .persistent_keepalive_interval(10)]);
+        self.wg.set_device(device)?;
 
         loop {
-            match signal_receiver.recv() {
-                Ok(signal) => {
-                    info!("Received signal: {:?}", signal);
-                    self.should_exit = true;
-                }
-                Err(_) => (),
+            if let Ok(signal) = signal_receiver.recv() {
+                info!("Received signal: {:?}", signal);
+                self.should_exit = true;
             }
             if self.should_exit {
                 debug!("Exiting...");
@@ -71,8 +86,6 @@ impl<'a> WgMaestro for Client<'a> {
             }
             self.do_loop()?;
         }
-
-        Ok(())
     }
 
     async fn cleanup(&mut self) -> Result<()> {
@@ -95,9 +108,8 @@ impl<'a> Client<'a> {
             .private_key(&config.private_key)
             .listen_port(config.wireguard_port);
 
-        match config.fwmark {
-            Some(fwmark) => device = device.fwmark(fwmark),
-            _ => (),
+        if let Some(fwmark) = config.fwmark {
+            device = device.fwmark(fwmark)
         }
 
         wg.set_device(device)?;

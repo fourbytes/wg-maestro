@@ -1,6 +1,7 @@
 # When null the CLI will attempt to find a Wireguard interface.
 interface_name: wgm1
 wireguard_port: 51840
+maestro_port: 51831 # Default
 # Our private key, used for all communication.
 private_key: YOlqSxydFB1G4k7+AbBDGfyhYZBTxWPAjZBd/etYF2U=
 

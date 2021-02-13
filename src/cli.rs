@@ -5,14 +5,12 @@ use clap::Clap;
 use crossbeam_channel::unbounded;
 use log::LevelFilter;
 use log::*;
-use pretty_env_logger;
 use serde::de::DeserializeOwned;
-use serde_yaml;
 use tokio::signal::unix::{signal, SignalKind};
 
 use crate::common::WgMaestro;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// This doc string acts as a help message when the user runs '--help'
 /// as do all doc strings on fields
@@ -99,9 +97,8 @@ impl Application {
         let mut signal_stream = signal(SignalKind::interrupt())?;
         tokio::spawn(async move {
             loop {
-                match signal_stream.recv().await {
-                    Some(_) => s.send(SignalKind::interrupt()).ok().unwrap(),
-                    None => (),
+                if let Some(_) = signal_stream.recv().await {
+                    s.send(SignalKind::interrupt()).ok().unwrap()
                 };
             }
         });

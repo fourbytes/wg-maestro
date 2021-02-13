@@ -1,19 +1,52 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use base64;
 use byteorder::{BigEndian, ByteOrder};
 use crossbeam_channel::Receiver;
-use ipnet::IpNet;
+use futures::stream::TryStreamExt;
+use ipnet::Ipv6Net;
+use ipnetwork::{IpNetwork, Ipv6Network};
 use log::*;
+use rtnetlink::{new_connection, Error, Handle};
 use serde::de::{self, Deserializer};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::net::Ipv6Addr;
-use tokio::process::Command;
 use tokio::signal::unix::SignalKind;
-use wireguard_uapi::WireGuardDeviceAddrScope;
 use wireguard_uapi::{err, get, set};
 use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
+
+pub async fn set_link_up(link_name: &str, handle: Handle) -> Result<(), Error> {
+    let mut links = handle
+        .link()
+        .get()
+        .set_name_filter(link_name.to_string())
+        .execute();
+    if let Some(link) = links.try_next().await? {
+        handle.link().set(link.header.index).up().execute().await?
+    }
+    Ok(())
+}
+
+pub async fn add_address(link_name: &str, ip: Ipv6Net, handle: Handle) -> Result<(), Error> {
+    let ip = Ipv6Network::from(ip.addr());
+    let mut links = handle
+        .link()
+        .get()
+        .set_name_filter(link_name.to_string())
+        .execute();
+    if let Some(link) = links.try_next().await? {
+        handle
+            .address()
+            .add(
+                link.header.index,
+                std::net::IpAddr::V6(ip.ip()),
+                ip.prefix(),
+            )
+            .execute()
+            .await?
+    }
+    Ok(())
+}
 
 pub type WgKey = [u8; 32];
 pub fn base64_to_key<'de, D>(deserializer: D) -> Result<WgKey, D::Error>
@@ -34,6 +67,27 @@ where
     }
 }
 
+pub fn address_from_public_key(key: &WgKey) -> Result<Ipv6Addr> {
+    // Replace DefaultHasher with a more robust solution.
+    let hash = {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        hasher.finish()
+    };
+    let data = {
+        let mut buf = [0u8; 8];
+        BigEndian::write_u64(&mut buf, hash);
+        let mut data = [0u16; 4];
+        for (i, item) in buf.chunks(2).enumerate() {
+            data[i] = BigEndian::read_u16(item)
+        }
+        data
+    };
+    Ok(Ipv6Addr::new(
+        0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3],
+    ))
+}
+
 #[async_trait]
 pub trait WgMaestro {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> anyhow::Result<()>;
@@ -48,7 +102,7 @@ pub struct WgInterface<'a> {
 }
 
 impl<'a> WgInterface<'a> {
-    pub fn from_name(ifname: String) -> Result<Self, Error> {
+    pub fn from_name(ifname: String) -> Result<Self> {
         trace!("Connecting to Wireguard and routing sockets.");
         let mut wg_socket = WgSocket::connect()?;
         let mut route_socket = RouteSocket::connect()?;
@@ -79,28 +133,11 @@ impl<'a> WgInterface<'a> {
         self.device.public_key.unwrap()
     }
 
-    pub fn get_ll_address(&self) -> Result<Ipv6Addr> {
-        // Replace DefaultHasher with a more robust solution.
-        let hash = {
-            let mut hasher = DefaultHasher::new();
-            self.device.public_key.hash(&mut hasher);
-            hasher.finish()
-        };
-        let data = {
-            let mut buf = [0u8; 8];
-            BigEndian::write_u64(&mut buf, hash);
-            let mut data = [0u16; 4];
-            for (i, item) in buf.chunks(2).enumerate() {
-                data[i] = BigEndian::read_u16(item)
-            }
-            data
-        };
-        Ok(Ipv6Addr::new(
-            0xfe80, 0, 0, 0, data[0], data[1], data[2], data[3],
-        ))
+    pub fn ll_address(&self) -> Result<Ipv6Addr> {
+        address_from_public_key(&self.device.public_key.unwrap())
     }
 
-    pub async fn setup_address(
+    /* pub async fn setup_address(
         &mut self,
         addr: IpNet,
         scope: WireGuardDeviceAddrScope,
@@ -126,7 +163,7 @@ impl<'a> WgInterface<'a> {
         // trace!("Spawning command: {}", command);
 
         Ok(())
-    }
+    } */
 
     pub fn cleanup(&mut self) -> Result<()> {
         self.route_socket.del_device(&self.device.ifname)?;

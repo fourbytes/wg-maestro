@@ -1,18 +1,24 @@
-use anyhow::{Error, Result};
+use std::net::{IpAddr, SocketAddr};
+
+use anyhow::Result;
 use async_trait::async_trait;
 use crossbeam_channel::Receiver;
 use ipnet::{IpNet, Ipv6Net};
+use ipnetwork::Ipv6Network;
 use log::*;
+use rtnetlink::{new_connection, Error, Handle};
 use serde::{Deserialize, Serialize};
-use std::net::Ipv6Addr;
 use tokio::net::TcpListener;
-use tokio::prelude::*;
 use tokio::signal::unix::SignalKind;
 
-use wireguard_uapi::set::WgDeviceF;
-use wireguard_uapi::WireGuardDeviceAddrScope;
+use wireguard_uapi::{
+    set::Peer,
+    set::{AllowedIp, WgDeviceF},
+};
 
-use crate::common::{base64_to_key, WgInterface, WgKey, WgMaestro};
+use crate::common::{
+    add_address, address_from_public_key, base64_to_key, set_link_up, WgInterface, WgKey, WgMaestro,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ServerConfig {
@@ -51,30 +57,50 @@ pub struct Server<'a> {
 #[async_trait]
 impl<'a> WgMaestro for Server<'a> {
     async fn run(&mut self, signal_receiver: Receiver<SignalKind>) -> anyhow::Result<()> {
+        let ll_address = self.wg.ll_address()?;
         let device = self.wg.get_device().ok().unwrap();
         info!(
             "Configured Wireguard interface (received public key {})",
             base64::encode(device.public_key.unwrap())
         );
 
-        let ll_address = self.wg.get_ll_address()?;
+        info!("Setting up netlink route connection...");
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
         debug!("Setting Wireguard link-local address to {}", ll_address);
         let ll_net = Ipv6Net::new(ll_address, 64)?;
-        self.wg
-            .setup_address(IpNet::V6(ll_net), WireGuardDeviceAddrScope::Link)
-            .await?;
+        add_address(&device.ifname, ll_net, handle.clone()).await?;
+        set_link_up(&device.ifname, handle).await?;
+
+        debug!("Updating peers...");
+        let clients: Vec<_> = self
+            .config
+            .clients
+            .iter()
+            .map(|client| {
+                (
+                    client.public_key,
+                    IpAddr::V6(address_from_public_key(&client.public_key).unwrap()),
+                )
+            })
+            .collect();
+        let device = self
+            .wg
+            .build_set_device()
+            .peers(vec![Peer::from_public_key(&clients[0].0)
+                .allowed_ips(vec![AllowedIp::from_ipaddr(&clients[0].1)])
+                .persistent_keepalive_interval(10)]);
+        self.wg.set_device(device)?;
 
         let server_addr = format!("127.0.0.1:{}", self.config.maestro_port);
         info!("Starting server loop on {}", server_addr);
         self.listener = Some(TcpListener::bind(server_addr).await?);
 
         loop {
-            match signal_receiver.recv() {
-                Ok(signal) => {
-                    info!("Received signal: {:?}", signal);
-                    self.should_exit = true;
-                }
-                Err(_) => (),
+            if let Ok(signal) = signal_receiver.recv() {
+                info!("Received signal: {:?}", signal);
+                self.should_exit = true;
             }
             if self.should_exit {
                 debug!("Exiting...");
@@ -84,14 +110,11 @@ impl<'a> WgMaestro for Server<'a> {
         }
     }
 
-    async fn cleanup(&mut self) -> anyhow::Result<()> {
+    async fn cleanup(&mut self) -> Result<()> {
         log::debug!("Cleaning up...");
         {
             // Shutdown the TCP stream
-            match self.listener.take() {
-                Some(_) => (),
-                _ => (),
-            }
+            if self.listener.take().is_some() {}
         }
         {
             // Remove the wireguard interface
@@ -102,7 +125,7 @@ impl<'a> WgMaestro for Server<'a> {
 }
 
 impl<'a> Server<'a> {
-    pub fn new(config: ServerConfig) -> Result<Self, Error> {
+    pub fn new(config: ServerConfig) -> Result<Self> {
         debug!("Setting up server...");
         let mut wg = WgInterface::from_name(config.interface_name.clone())?;
         let mut device = wg
@@ -111,9 +134,8 @@ impl<'a> Server<'a> {
             .private_key(&config.private_key)
             .listen_port(config.wireguard_port);
 
-        match config.fwmark {
-            Some(fwmark) => device = device.fwmark(fwmark),
-            _ => (),
+        if let Some(fwmark) = config.fwmark {
+            device = device.fwmark(fwmark)
         }
 
         wg.set_device(device)?;
@@ -126,7 +148,7 @@ impl<'a> Server<'a> {
         })
     }
 
-    fn do_loop(&mut self) -> anyhow::Result<()> {
+    fn do_loop(&mut self) -> Result<()> {
         Ok(())
     }
 }
